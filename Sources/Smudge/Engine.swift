@@ -83,6 +83,9 @@ final class SmudgeEngine {
             for _ in 0..<n { spawnBlob(type: type, sizeMul: w.size, alphaMul: w.alpha) }
         case .notify:
             setState(.waiting)
+        case .quiet:
+            // 只是"这会儿不忙了"，不是"干完了"：脏自己慢慢退下去，不冲洗、不响铃。
+            if state == .running || state == .waiting { setState(.idle) }
         case .stop:
             guard state != .done, state != .idle else { return }
             setState(.done)
@@ -212,8 +215,8 @@ final class SmudgeEngine {
                 spawnAcc -= 1
                 let cap = overlays.first?.sim.dirtEstimate ?? 0
                 if cap < params.dirtCap {
-                    spawnBlob(type: params.mapMode ? .fog : params.primaryType,
-                              sizeMul: 0.7, alphaMul: 0.7)
+                    let ambient = (params.mapMode && monitor.hookAlive) ? DirtType.fog : params.primaryType
+                    spawnBlob(type: ambient, sizeMul: 0.7, alphaMul: 0.7)
                 } else {
                     spawnAcc = 0
                 }

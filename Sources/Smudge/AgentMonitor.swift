@@ -13,6 +13,9 @@ final class AgentMonitor {
         case notify
         case failed(String)
         case agentPID(pid_t)
+        /// CPU 兜底判断的"这会儿不忙了"。注意它和 .stop 不是一回事：
+        /// .stop 是 hook 说的"任务真的结束了"，才配得上一次冲洗。
+        case quiet
     }
 
     var onEvent: ((Event) -> Void)?
@@ -23,8 +26,9 @@ final class AgentMonitor {
     private var listener: NWListener?
     private let q = DispatchQueue(label: "com.smudge.hook")
     private var cpuTimer: Timer?
-    private var busySince: Date?
-    private var lastCPUBusy = false
+    private var busyStreak = 0
+    private var idleStreak = 0
+    private var cpuRunning = false
     var processNames: [String] = ["claude"]
 
     init(port: UInt16 = 8787) {
@@ -145,20 +149,26 @@ final class AgentMonitor {
         return Date().timeIntervalSince(l) < 90
     }
 
+    /// agent 的 CPU 在一次会话里本来就是忽高忽低的（等模型返回的时候接近零），
+    /// 所以两头都要迟滞：连着忙几秒才算开工，连着闲快半分钟才算收工。
+    /// 而且收工只发 .quiet，不发 .stop —— CPU 看不出"任务完成"，
+    /// 没资格触发那一下冲洗。
     private func scanCPU() {
         if hookIsAuthoritative { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             let busy = self.agentCPU() > 12
             DispatchQueue.main.async {
-                if busy && !self.lastCPUBusy {
-                    self.busySince = Date()
+                if busy { self.busyStreak += 1; self.idleStreak = 0 }
+                else { self.idleStreak += 1; self.busyStreak = 0 }
+
+                if !self.cpuRunning && self.busyStreak >= 2 {          // 约 3 秒
+                    self.cpuRunning = true
                     self.onEvent?(.prompt)
-                } else if !busy && self.lastCPUBusy {
-                    self.onEvent?(.stop)
+                } else if self.cpuRunning && self.idleStreak >= 16 {   // 约 24 秒
+                    self.cpuRunning = false
+                    self.onEvent?(.quiet)
                 }
-                if busy { self.onEvent?(.tool("Bash")) }
-                self.lastCPUBusy = busy
             }
         }
     }
