@@ -7,10 +7,24 @@ Agent 干活的时候，屏幕开始变脏。拖窗口就是擦。
 任务挂了或者 token 见底，留下不挥发的红渍。拖任何一个窗口，走过的地方被刮干净，
 慢推擦得净、快划只抹开，前缘会堆起油脊、推厚了会崩。
 
+![六种脏各来几块，中间横着擦了一道](docs/preview.png)
+
+上图是 `--selftest` 的离屏渲染：左上机械油污、中上积灰、右上哈气、
+左下咖啡渍、中下墨渍、右下水珠，中间那条横带是刮板走过的地方，
+右半边的斜纹是没擦匀留下的水痕。底下垫的是假桌面，用来看可读性。
+
+## 装
+
+去 [Releases](https://github.com/SpaceZephyr/Smudge/releases) 下 DMG，
+拖进 Applications。第一次打开被 Gatekeeper 拦的话，右键 → 打开，
+或者 `xattr -dr com.apple.quarantine /Applications/Smudge.app`
+（只做了 ad-hoc 签名，没买苹果开发者证书）。
+
 ## 编译
 
 ```bash
 ./build.sh            # 出 build/Smudge.app
+./package.sh 0.1      # 出 build/Smudge-0.1.dmg
 open build/Smudge.app
 ```
 
