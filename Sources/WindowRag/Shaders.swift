@@ -321,5 +321,45 @@ fragment float4 comp_fs(VOut in [[stage_in]],
 
     return clamp(outc, 0.0, 1.0);
 }
+
+// ---------------------------------------------------------------- 金币
+// Agent 烧掉的 token 变成屏幕上的金币，鼠标晃过去就吃掉。
+// 复用 sprite_vs 的顶点，rect 和合成用的是同一套遮罩像素坐标。
+
+fragment float4 coin_fs(VOut in [[stage_in]], constant SpriteU& u [[buffer(0)]]) {
+    float2 q = in.uv * 2.0 - 1.0;
+    float spin = u.shapeP.x;          // 旋转相位
+    float pop  = u.shapeP.y;          // >0 表示正在被吃掉
+    float alpha = u.tint.w;
+
+    if (pop > 0.0) {
+        // 吃掉的瞬间：一圈扩散出去的光环
+        float r = length(q);
+        float ring = smoothstep(0.0, 0.45, r) * smoothstep(1.0, 0.58, r);
+        float a = ring * (1.0 - pop) * alpha * 0.95;
+        float3 flash = mix(float3(1.0, 0.94, 0.72), u.tint.xyz, pop);
+        return float4(flash * a * 1.6, a);
+    }
+
+    // 立起来的硬币在转，水平方向压扁
+    float sq = max(0.30, abs(cos(spin * 6.28318)));   // 别薄到看不见
+    q.x /= sq;
+    float r = length(q);
+    if (r > 1.0) return float4(0.0);
+
+    float3 gold = u.tint.xyz;
+    float3 col = mix(gold * 0.66, gold, smoothstep(0.96, 0.74, r));   // 边缘暗一圈
+    float inner = smoothstep(0.60, 0.53, r) * smoothstep(0.26, 0.33, r);
+    col = mix(col, gold * 1.2, inner * 0.55);                          // 币面内圈
+    float2 hl = q - float2(-0.30, -0.33);
+    col += float3(1.0, 0.97, 0.86) * smoothstep(0.46, 0.0, length(hl)) * 0.46;
+
+    // 外面一圈很淡的暗边，浅色桌面上也分得清
+    float shade = smoothstep(1.0, 0.86, r) - smoothstep(0.94, 0.80, r);
+    col = mix(col, col * 0.42, clamp(shade, 0.0, 1.0) * 0.55);
+
+    float a = smoothstep(1.0, 0.90, r) * alpha;
+    return float4(col * a, a);
+}
 """#
 }

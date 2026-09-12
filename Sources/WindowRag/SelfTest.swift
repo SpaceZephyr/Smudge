@@ -72,7 +72,16 @@ enum SelfTest {
         rp.colorAttachments[0].loadAction = .clear
         rp.colorAttachments[0].storeAction = .store
         rp.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
-        sim.encodeComposite(cmd, into: rp, uniforms: uniforms(W: W, H: H))
+        var coins: [CoinSprite] = []
+        for i in 0..<7 {
+            let r = Float(20 + i % 3 * 3)
+            let x = Float(W) * (0.12 + Float(i) * 0.125)
+            let y = Float(H) * (0.5 + sin(Float(i) * 1.1) * 0.11) - 46
+            coins.append(CoinSprite(rect: SIMD4(x - r, y - r, r * 2, r * 2),
+                                    tint: SIMD4(1.0, 0.80, 0.26, 1),
+                                    spin: Float(i) * 0.13, pop: i == 6 ? 0.45 : 0))
+        }
+        sim.encodeComposite(cmd, into: rp, uniforms: uniforms(W: W, H: H), coins: coins)
         cmd.commit()
         cmd.waitUntilCompleted()
 

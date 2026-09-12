@@ -2,6 +2,14 @@ import Foundation
 import Metal
 import simd
 
+/// 一枚要画的金币
+struct CoinSprite {
+    var rect: SIMD4<Float>     // 遮罩像素坐标，和合成同一套
+    var tint: SIMD4<Float>     // rgb + alpha
+    var spin: Float
+    var pop: Float             // 0 普通，>0 正在被吃掉
+}
+
 /// 一次要画进遮罩的东西
 struct SpriteOp {
     var target: Int          // 0=T0 1=T1 2=T2(薄膜)
@@ -22,6 +30,7 @@ final class DirtSim {
     private let pMul: MTLRenderPipelineState
     private let pErase: MTLRenderPipelineState
     private let pComp: MTLRenderPipelineState
+    private let pCoin: MTLRenderPipelineState
 
     private(set) var maskW = 1
     private(set) var maskH = 1
@@ -40,7 +49,8 @@ final class DirtSim {
         let lib = try device.makeLibrary(source: Shaders.source, options: nil)
         guard let vs = lib.makeFunction(name: "sprite_vs"),
               let fs = lib.makeFunction(name: "sprite_fs"),
-              let cs = lib.makeFunction(name: "comp_fs") else {
+              let cs = lib.makeFunction(name: "comp_fs"),
+              let coinF = lib.makeFunction(name: "coin_fs") else {
             throw WindowRagError.shader("着色器入口找不到")
         }
 
@@ -88,6 +98,20 @@ final class DirtSim {
         cd.colorAttachments[0].pixelFormat = drawableFormat
         cd.colorAttachments[0].isBlendingEnabled = false
         pComp = try device.makeRenderPipelineState(descriptor: cd)
+
+        // 金币画在合成结果之上，预乘的 source-over
+        let kd = MTLRenderPipelineDescriptor()
+        kd.vertexFunction = vs
+        kd.fragmentFunction = coinF
+        kd.colorAttachments[0].pixelFormat = drawableFormat
+        kd.colorAttachments[0].isBlendingEnabled = true
+        kd.colorAttachments[0].rgbBlendOperation = .add
+        kd.colorAttachments[0].alphaBlendOperation = .add
+        kd.colorAttachments[0].sourceRGBBlendFactor = .one
+        kd.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        kd.colorAttachments[0].sourceAlphaBlendFactor = .one
+        kd.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        pCoin = try device.makeRenderPipelineState(descriptor: kd)
     }
 
     // MARK: - 尺寸
@@ -158,7 +182,8 @@ final class DirtSim {
         }
     }
 
-    func encodeComposite(_ cmd: MTLCommandBuffer, into rp: MTLRenderPassDescriptor, uniforms: [Float]) {
+    func encodeComposite(_ cmd: MTLCommandBuffer, into rp: MTLRenderPassDescriptor,
+                         uniforms: [Float], coins: [CoinSprite] = []) {
         guard t0 != nil, let enc = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
         enc.label = "composite"
         enc.setRenderPipelineState(pComp)
@@ -171,6 +196,17 @@ final class DirtSim {
         var u = uniforms
         enc.setFragmentBytes(&u, length: MemoryLayout<Float>.stride * u.count, index: 0)
         enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+
+        if !coins.isEmpty {
+            enc.setRenderPipelineState(pCoin)
+            for c in coins {
+                var cu = uniform(rect: c.rect, tint: c.tint, mode: 9, seed: 0,
+                                 shapeP: SIMD4(c.spin, c.pop, 0, 0))
+                enc.setVertexBytes(&cu, length: MemoryLayout<SpriteU>.stride, index: 0)
+                enc.setFragmentBytes(&cu, length: MemoryLayout<SpriteU>.stride, index: 0)
+                enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            }
+        }
         enc.endEncoding()
     }
 

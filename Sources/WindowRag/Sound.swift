@@ -147,6 +147,17 @@ final class SoundEngine {
             self.push(1, dur: 0.45, f0: 1976, f1: 0, amp: 0.09)
         }
     }
+    /// 吃到一枚金币：两个音一前一后，越连越高
+    func coin(pitch: Int) {
+        guard enabled else { return }
+        let base: Float = 988 * powf(1.0595, Float(min(pitch, 12)))
+        push(1, dur: 0.07, f0: base, f1: 0, amp: 0.07)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { [weak self] in
+            guard let self, self.enabled else { return }
+            self.push(1, dur: 0.17, f0: base * 1.5, f1: 0, amp: 0.075)
+        }
+    }
+
     func fault() {
         guard enabled else { return }
         push(1, dur: 0.30, f0: 150, f1: 0, amp: 0.16)

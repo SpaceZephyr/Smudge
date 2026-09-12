@@ -139,6 +139,13 @@ struct Params: Codable {
     var volume: Float = 0.55
     var quality: Float = 0.46
 
+    /// 金币：Agent 烧掉的 token 变成屏幕上的金币，晃鼠标吃掉
+    var coinsEnabled: Bool = true
+    var tokensPerCoin: Float = 400      // 一枚金币值多少 token
+    var coinLife: Float = 26            // 没人捡的话多久消失（秒）
+    var coinMagnet: Float = 52          // 鼠标多近算吃到（点）
+    var coinMax: Float = 140            // 屏幕上最多同时几枚
+
     /// 只有被拖动的 Claude Code 窗口能擦，还是任何窗口都能擦
     var claudeWindowOnly: Bool = false
     /// 认作 Claude Code 的进程名（CPU 兜底用）
@@ -200,6 +207,11 @@ extension Params {
         oilAlpha = f(.oilAlpha, d.oilAlpha)
         volume = f(.volume, d.volume)
         quality = f(.quality, d.quality)
+        coinsEnabled = b(.coinsEnabled, d.coinsEnabled)
+        tokensPerCoin = f(.tokensPerCoin, d.tokensPerCoin)
+        coinLife = f(.coinLife, d.coinLife)
+        coinMagnet = f(.coinMagnet, d.coinMagnet)
+        coinMax = f(.coinMax, d.coinMax)
         claudeWindowOnly = b(.claudeWindowOnly, d.claudeWindowOnly)
         agentProcessNames = (try? c.decode([String].self, forKey: .agentProcessNames)) ?? d.agentProcessNames
     }

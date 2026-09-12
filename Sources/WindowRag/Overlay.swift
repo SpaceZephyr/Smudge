@@ -30,6 +30,8 @@ final class ScreenOverlay: NSObject, MTKViewDelegate {
 
     /// 这一帧要落下 / 擦掉的东西
     var pending: [SpriteOp] = []
+    /// 这块屏上还没被吃掉的金币
+    var coins: [Coin] = []
 
     init(screen: NSScreen, device: MTLDevice, engine: WindowRagEngine) throws {
         self.screen = screen

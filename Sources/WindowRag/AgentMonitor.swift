@@ -16,6 +16,8 @@ final class AgentMonitor {
         /// CPU 兜底判断的"这会儿不忙了"。注意它和 .stop 不是一回事：
         /// .stop 是 hook 说的"任务真的结束了"，才配得上一次冲洗。
         case quiet
+        /// hook 输入里带的会话记录路径，token 金币要靠它
+        case transcript(String)
     }
 
     var onEvent: ((Event) -> Void)?
@@ -109,8 +111,9 @@ final class AgentMonitor {
         hookAlive = true
         let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
 
-        // claude 的 hook 输入里带着它自己的进程信息，顺手记下来
+        // claude 的 hook 输入里带着它自己的进程信息和会话记录路径，顺手记下来
         if let p = json["pid"] as? Int { emit(.agentPID(pid_t(p))) }
+        if let t = json["transcript_path"] as? String, !t.isEmpty { emit(.transcript(t)) }
 
         switch path {
         case "/tool":

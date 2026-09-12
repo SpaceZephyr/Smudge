@@ -3,6 +3,15 @@ import Metal
 import MetalKit
 import simd
 
+/// 屏幕上的一枚金币。Agent 烧掉的 token 变的。
+struct Coin {
+    var x: Float, y: Float          // 遮罩像素坐标
+    var vx: Float, vy: Float
+    var born: CFTimeInterval
+    var spin: Float
+    var pop: Float = 0              // >0 正在被吃掉的动画
+}
+
 /// 把 Agent 状态、窗口拖动、污渍模拟和声音串起来。
 /// 每帧只跑一次共享逻辑，然后各屏各自渲染。
 final class WindowRagEngine {
@@ -11,12 +20,15 @@ final class WindowRagEngine {
     private(set) var state: AgentState = .idle
     private(set) var calls = 0
     private(set) var wipedArea: Float = 0
+    private(set) var coinsCollected = 0
+    private(set) var tokensSeen = 0
 
     let device: MTLDevice
     let queue: MTLCommandQueue
     let sound = SoundEngine()
     let tracker = WindowTracker()
     let monitor: AgentMonitor
+    let tokens = TokenWatcher()
     var overlays: [ScreenOverlay] = []
     var onStatusChange: (() -> Void)?
     var paused = false { didSet { quietSince = 0; updateFrameRate() } }
@@ -40,6 +52,7 @@ final class WindowRagEngine {
         monitor = AgentMonitor()
         monitor.processNames = params.agentProcessNames
         monitor.onEvent = { [weak self] e in self?.handle(e) }
+        tokens.onTokens = { [weak self] n in self?.addTokens(n) }
         applyParams()
     }
 
@@ -81,6 +94,8 @@ final class WindowRagEngine {
             let w = ToolMap.weight(for: name)
             let n = 1 + Int.random(in: 0...1)
             for _ in 0..<n { spawnBlob(type: type, sizeMul: w.size, alphaMul: w.alpha) }
+        case .transcript(let path):
+            tokens.adopt(transcript: path)
         case .notify:
             setState(.waiting)
         case .quiet:
@@ -119,7 +134,8 @@ final class WindowRagEngine {
 
     private var isQuiet: Bool {
         !paused && state == .idle && filmLevel < 0.005 && flushT < 0
-            && overlays.allSatisfy { $0.sim.dirtEstimate < 0.002 }
+            && pendingCoins == 0
+            && overlays.allSatisfy { $0.sim.dirtEstimate < 0.002 && $0.coins.isEmpty }
     }
 
     private func updateFrameRate() {
@@ -161,13 +177,145 @@ final class WindowRagEngine {
     func manualReset() {
         overlays.forEach { $0.sim.resize(width: 0, height: 0); $0.resizeMask() }
         filmLevel = 0; calls = 0; wipedArea = 0; flushT = -1; ridgeAmt = 0
+        overlays.forEach { $0.coins.removeAll() }
+        coinsCollected = 0; tokensSeen = 0; tokenAcc = 0; pendingCoins = 0
         setState(.idle)
+    }
+
+    // MARK: - 金币
+
+    private var tokenAcc: Float = 0
+    private var pendingCoins = 0
+    private var mouseMovedAt: CFTimeInterval = 0
+    private var lastMouseCG = CGPoint(x: -9e5, y: -9e5)
+    private var coinPitch = 0
+    private var coinDrip: Float = 0
+    private var lastCoinAt: CFTimeInterval = 0
+
+    /// 烧掉的 token 攒够一枚就掉一枚金币
+    private func addTokens(_ n: Int) {
+        tokensSeen += n
+        guard params.coinsEnabled, n > 0 else { return }
+        tokenAcc += Float(n)
+        let per = max(20, params.tokensPerCoin)
+        var due = 0
+        while tokenAcc >= per {
+            tokenAcc -= per
+            due += 1
+        }
+        // 一条消息动辄上万 token，一次性砸下来既撞上限又难看，
+        // 排进队里按每秒几枚慢慢冒，像个小喷泉
+        pendingCoins = min(90, pendingCoins + due)
+        if debugLog && due > 0 {
+            NSLog("[windowrag] +%d token，排队 %d 枚（待发 %d）", n, due, pendingCoins)
+        }
+    }
+
+    private func spawnCoin() {
+        guard let o = randomOverlay() else { return }
+        let now = CACurrentMediaTime()
+        let px = Float(o.pxPerPoint)
+        o.coins.append(Coin(
+            x: Float.random(in: 0.06...0.94) * Float(o.sim.maskW),
+            y: Float.random(in: 0.06...0.66) * Float(o.sim.maskH),
+            vx: Float.random(in: -6...6) * px,
+            vy: Float.random(in: -3...6) * px,
+            born: now,
+            spin: Float.random(in: 0...1)))
+        if o.coins.count > Int(params.coinMax) {
+            o.coins.removeFirst(o.coins.count - Int(params.coinMax))
+        }
+    }
+
+    /// 晃鼠标吃金币。停着不动不算 —— 这东西是给手找事干的。
+    private func updateCoins(_ dt: Float) {
+        let now = CACurrentMediaTime()
+        let cur = WindowTracker.cursorCG
+        if abs(cur.x - lastMouseCG.x) + abs(cur.y - lastMouseCG.y) > 1.5 {
+            mouseMovedAt = now
+            lastMouseCG = cur
+        }
+        let moving = now - mouseMovedAt < 0.4
+
+        // 队列里的币按每秒 7 枚往外冒
+        if pendingCoins > 0 {
+            coinDrip += dt * 7
+            while coinDrip >= 1 && pendingCoins > 0 {
+                coinDrip -= 1
+                pendingCoins -= 1
+                spawnCoin()
+            }
+        }
+        if now - lastCoinAt > 1.6 { coinPitch = 0 }     // 连吃才升调
+
+        for o in overlays {
+            guard !o.coins.isEmpty else { continue }
+            let px = Float(o.pxPerPoint)
+            let magnet = params.coinMagnet * px
+            let onThis = o.cgFrame.insetBy(dx: -30, dy: -30).contains(cur)
+            let m = onThis ? o.toMask(cur) : CGPoint(x: -9e5, y: -9e5)
+
+            var i = 0
+            while i < o.coins.count {
+                var c = o.coins[i]
+                if c.pop > 0 {
+                    c.pop += dt * 3.4
+                    if c.pop >= 1 { o.coins.remove(at: i); continue }
+                    o.coins[i] = c; i += 1; continue
+                }
+                let age = Float(now - c.born)
+                if age > params.coinLife { o.coins.remove(at: i); continue }
+
+                c.vy = min(c.vy + 0.7 * px * dt, 17 * px)   // 很慢地往下飘，别沉出屏幕
+                c.x += c.vx * dt
+                c.y += c.vy * dt + sin(Float(now) * 2.2 + c.spin * 6) * 3 * px * dt
+                c.spin += dt * 0.42
+                if c.y > Float(o.sim.maskH) + 40 { o.coins.remove(at: i); continue }
+
+                if moving, onThis {
+                    let dx = c.x - Float(m.x), dy = c.y - Float(m.y)
+                    if dx * dx + dy * dy < magnet * magnet {
+                        c.pop = 0.001
+                        coinsCollected += 1
+                        coinPitch += 1
+                        lastCoinAt = now
+                        sound.coin(pitch: coinPitch)
+                        onStatusChange?()
+                    }
+                }
+                o.coins[i] = c
+                i += 1
+            }
+        }
+    }
+
+    /// 交给渲染用的金币
+    func coinSprites(_ o: ScreenOverlay) -> [CoinSprite] {
+        guard params.coinsEnabled, !o.coins.isEmpty else { return [] }
+        let now = CACurrentMediaTime()
+        let r = 17 * Float(o.pxPerPoint)              // 半径，点 → 遮罩像素
+        return o.coins.map { c in
+            let age = Float(now - c.born)
+            var a: Float = min(1, age / 0.22)                        // 淡入
+            a *= min(1, max(0, (params.coinLife - age) / 2.2))       // 快过期时淡出
+            let grow: Float = c.pop > 0 ? 1 + c.pop * 1.5 : 1
+            let rr = r * grow
+            return CoinSprite(
+                rect: SIMD4(c.x - rr, c.y - rr, rr * 2, rr * 2),
+                tint: SIMD4(1.0, 0.80, 0.26, max(0, a)),
+                spin: c.spin, pop: c.pop)
+        }
     }
 
     // 没有 agent 也能试手感
     func simulateTool(_ name: String) { handle(.tool(name)) }
     func simulateStop() { handle(.stop) }
     func simulateFail() { handle(.failed("test")) }
+    func simulateCoins(_ n: Int) {
+        guard params.coinsEnabled else { return }
+        for _ in 0..<n { spawnCoin() }
+        updateFrameRate()
+    }
 
     var dirtPercent: Int {
         let v = overlays.first?.sim.dirtEstimate ?? 0
@@ -224,6 +372,7 @@ final class WindowRagEngine {
         }
 
         applyWipes(dt: dt)
+        if params.coinsEnabled { updateCoins(dt) } else { overlays.forEach { $0.coins.removeAll() } }
         advanceFlush(dt: dt)
         for ov in overlays where ov.pending.count > 600 {
             ov.pending.removeFirst(ov.pending.count - 600)
@@ -454,7 +603,8 @@ final class WindowRagEngine {
         let (d0, d1, fg) = pendingDecay
         ov.sim.encodeSim(cmd, ops: ov.pending, decay0: d0, decay1: d1, filmGrow: fg)
         ov.pending.removeAll(keepingCapacity: true)   // 画完才清，见 frameTick
-        ov.sim.encodeComposite(cmd, into: rp, uniforms: compositeUniforms(ov))
+        ov.sim.encodeComposite(cmd, into: rp, uniforms: compositeUniforms(ov),
+                               coins: coinSprites(ov))
         cmd.present(drawable)
         cmd.commit()
     }

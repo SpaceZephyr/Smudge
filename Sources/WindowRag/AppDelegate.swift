@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.rebuildOverlays()
         engine.onStatusChange = { [weak self] in self?.updateStatus() }
 
+        engine.tokens.start()
         do { try engine.monitor.start() }
         catch {
             NSLog("hook 端口起不来（换个端口或看看谁占了 \(engine.monitor.port)）：\(error)")
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ note: Notification) {
         engine?.monitor.stop()
+        engine?.tokens.stop()
         engine?.sound.shutdown()
     }
 
@@ -63,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         add(menu, "喷一把脏（试手感）", #selector(testSpray))
+        add(menu, "撒一把金币（试手感）", #selector(testCoins))
         add(menu, "模拟任务完成", #selector(testDone))
         add(menu, "模拟任务失败", #selector(testFail))
         menu.addItem(.separator())
@@ -70,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "只有 Claude Code 窗口能擦", #selector(toggleClaudeOnly), tag: 2)
         add(menu, "按工具映射污渍", #selector(toggleMapMode), tag: 3)
         add(menu, "声音", #selector(toggleSound), tag: 4)
+        add(menu, "金币（token 变金币，晃鼠标吃）", #selector(toggleCoins), tag: 5)
         menu.addItem(.separator())
 
         add(menu, "载入参数 JSON…", #selector(loadParams))
@@ -102,14 +106,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.image?.isTemplate = true
 
         let hook = engine.monitor.hookAlive ? "hook" : "CPU"
-        statusLine.title = String(format: "%@ · 脏污 %d%% · 已擦 %.2f m² · %@",
-                                  engine.state.label, engine.dirtPercent, engine.wipedArea, hook)
+        var line = String(format: "%@ · 脏污 %d%% · 已擦 %.2f m² · %@",
+                          engine.state.label, engine.dirtPercent, engine.wipedArea, hook)
+        if engine.params.coinsEnabled {
+            line += String(format: " · 金币 %d", engine.coinsCollected)
+        }
+        statusLine.title = line
 
         if let m = statusItem.menu {
             m.item(withTag: 1)?.title = engine.paused ? "继续" : "暂停"
             m.item(withTag: 2)?.state = engine.params.claudeWindowOnly ? .on : .off
             m.item(withTag: 3)?.state = engine.params.mapMode ? .on : .off
             m.item(withTag: 4)?.state = engine.sound.enabled ? .on : .off
+            m.item(withTag: 5)?.state = engine.params.coinsEnabled ? .on : .off
         }
     }
 
@@ -124,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let tools = ["Read", "Bash", "Write", "Grep", "Task"]
         for t in tools { engine.simulateTool(t) }
     }
+    @objc private func testCoins() { engine.simulateCoins(24) }
     @objc private func testDone() { engine.simulateStop() }
     @objc private func testFail() { engine.simulateFail() }
 
@@ -134,6 +144,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @objc private func toggleMapMode() {
         engine.params.mapMode.toggle()
+        try? engine.params.save()
+        updateStatus()
+    }
+    @objc private func toggleCoins() {
+        engine.params.coinsEnabled.toggle()
         try? engine.params.save()
         updateStatus()
     }
