@@ -41,7 +41,7 @@ final class DirtSim {
         guard let vs = lib.makeFunction(name: "sprite_vs"),
               let fs = lib.makeFunction(name: "sprite_fs"),
               let cs = lib.makeFunction(name: "comp_fs") else {
-            throw SmudgeError.shader("着色器入口找不到")
+            throw WindowRagError.shader("着色器入口找不到")
         }
 
         func mask(_ configure: (MTLRenderPipelineColorAttachmentDescriptor) -> Void) throws -> MTLRenderPipelineState {
@@ -245,7 +245,7 @@ final class DirtSim {
     }
 }
 
-enum SmudgeError: Error, LocalizedError {
+enum WindowRagError: Error, LocalizedError {
     case shader(String)
     case noMetal
     var errorDescription: String? {

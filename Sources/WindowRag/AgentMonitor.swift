@@ -24,7 +24,7 @@ final class AgentMonitor {
     private(set) var hookAlive = false
 
     private var listener: NWListener?
-    private let q = DispatchQueue(label: "com.smudge.hook")
+    private let q = DispatchQueue(label: "com.windowrag.hook")
     private var cpuTimer: Timer?
     private var busyStreak = 0
     private var idleStreak = 0

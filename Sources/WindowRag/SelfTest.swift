@@ -5,7 +5,7 @@ import ImageIO
 import UniformTypeIdentifiers
 import simd
 
-/// `Smudge --selftest out.png`
+/// `WindowRag --selftest out.png`
 /// 离屏渲染一张图：六种脏各来几块，中间横着擦一道。
 /// 不碰真实屏幕，用来核对着色器出来的东西对不对。
 enum SelfTest {

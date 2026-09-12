@@ -148,7 +148,7 @@ struct Params: Codable {
 
     static var fileURL: URL {
         let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/smudge", isDirectory: true)
+            .appendingPathComponent(".config/windowrag", isDirectory: true)
         return dir.appendingPathComponent("params.json")
     }
 

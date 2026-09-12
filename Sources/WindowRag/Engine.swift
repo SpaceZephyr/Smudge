@@ -5,7 +5,7 @@ import simd
 
 /// 把 Agent 状态、窗口拖动、污渍模拟和声音串起来。
 /// 每帧只跑一次共享逻辑，然后各屏各自渲染。
-final class SmudgeEngine {
+final class WindowRagEngine {
 
     var params: Params { didSet { applyParams() } }
     private(set) var state: AgentState = .idle
@@ -32,7 +32,7 @@ final class SmudgeEngine {
 
     init() throws {
         guard let d = MTLCreateSystemDefaultDevice(), let q = d.makeCommandQueue() else {
-            throw SmudgeError.noMetal
+            throw WindowRagError.noMetal
         }
         device = d
         queue = q
@@ -112,7 +112,7 @@ final class SmudgeEngine {
     /// 屏幕干净的时候一帧都不用画：把 MTKView 整个停掉，
     /// 改用一个 10Hz 的计时器继续盯着窗口有没有被拖。
     /// 一个常驻后台的小东西不该白烧 CPU。
-    let debugLog = ProcessInfo.processInfo.environment["SMUDGE_DEBUG"] != nil
+    let debugLog = ProcessInfo.processInfo.environment["WINDOWRAG_DEBUG"] != nil
     private var sleeping = false
     private var quietSince: CFTimeInterval = 0
     private var idleTimer: Timer?
@@ -135,7 +135,7 @@ final class SmudgeEngine {
 
     private func sleep() {
         sleeping = true
-        if debugLog { NSLog("[smudge] 休眠：屏幕干净，停渲染") }
+        if debugLog { NSLog("[windowrag] 休眠：屏幕干净，停渲染") }
         overlays.forEach { $0.view.isPaused = true }
         let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in self?.frameTick() }
         RunLoop.main.add(t, forMode: .common)
@@ -145,7 +145,7 @@ final class SmudgeEngine {
     private func wake() {
         guard sleeping else { return }
         sleeping = false
-        if debugLog { NSLog("[smudge] 唤醒") }
+        if debugLog { NSLog("[windowrag] 唤醒") }
         idleTimer?.invalidate(); idleTimer = nil
         overlays.forEach {
             $0.view.preferredFramesPerSecond = 60

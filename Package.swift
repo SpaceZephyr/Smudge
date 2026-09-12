@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "Smudge",
+    name: "WindowRag",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "Smudge",
-            path: "Sources/Smudge"
+            name: "WindowRag",
+            path: "Sources/WindowRag"
         )
     ]
 )

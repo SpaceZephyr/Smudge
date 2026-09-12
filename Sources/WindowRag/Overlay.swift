@@ -26,12 +26,12 @@ final class ScreenOverlay: NSObject, MTKViewDelegate {
     let view: MTKView
     let sim: DirtSim
     private(set) var screen: NSScreen
-    weak var engine: SmudgeEngine?
+    weak var engine: WindowRagEngine?
 
     /// 这一帧要落下 / 擦掉的东西
     var pending: [SpriteOp] = []
 
-    init(screen: NSScreen, device: MTLDevice, engine: SmudgeEngine) throws {
+    init(screen: NSScreen, device: MTLDevice, engine: WindowRagEngine) throws {
         self.screen = screen
         self.engine = engine
         self.window = OverlayWindow(screen: screen)

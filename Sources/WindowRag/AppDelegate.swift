@@ -2,17 +2,17 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
-    private var engine: SmudgeEngine!
+    private var engine: WindowRagEngine!
     private var statusItem: NSStatusItem!
     private var statusLine: NSMenuItem!
     private var refresh: Timer?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         do {
-            engine = try SmudgeEngine()
+            engine = try WindowRagEngine()
         } catch {
             let a = NSAlert()
-            a.messageText = "Smudge 起不来"
+            a.messageText = "WindowRag 起不来"
             a.informativeText = error.localizedDescription
             a.runModal()
             NSApp.terminate(nil)
@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "复制 hook 配置", #selector(copyHook))
         add(menu, "打开参数文件夹", #selector(openParamsFolder))
         menu.addItem(.separator())
-        add(menu, "退出 Smudge", #selector(quit))
+        add(menu, "退出 WindowRag", #selector(quit))
 
         statusItem.menu = menu
     }
@@ -98,7 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .done:    symbol = "checkmark.circle"
         case .failed:  symbol = "exclamationmark.triangle.fill"
         }
-        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Smudge")
+        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "WindowRag")
         statusItem.button?.image?.isTemplate = true
 
         let hook = engine.monitor.hookAlive ? "hook" : "CPU"
@@ -167,10 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         a.messageText = "hook 配置已复制"
         a.informativeText = """
         把它合并进 ~/.claude/settings.json 的 hooks 里。
-        合并之后 Claude Code 每次调用工具都会告诉 Smudge，
+        合并之后 Claude Code 每次调用工具都会告诉 WindowRag，
         污渍才分得清是在读文件还是在跑命令。
 
-        没配也能用 —— Smudge 会退回去看 claude 进程的 CPU，
+        没配也能用 —— WindowRag 会退回去看 claude 进程的 CPU，
         只是所有脏都长一个样。
         """
         a.runModal()

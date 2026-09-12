@@ -4,7 +4,7 @@ import AppKit
 if let i = CommandLine.arguments.firstIndex(of: "--selftest") {
     let path = CommandLine.arguments.count > i + 1
         ? CommandLine.arguments[i + 1]
-        : FileManager.default.currentDirectoryPath + "/smudge-selftest.png"
+        : FileManager.default.currentDirectoryPath + "/windowrag-selftest.png"
     let code = SelfTest.run(to: path)
     if code == 0 { print("写好了：\(path)") }
     exit(code)
